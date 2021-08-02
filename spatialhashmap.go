@@ -1,7 +1,7 @@
 package wordclouds
 
 import (
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type uniqueBox struct {

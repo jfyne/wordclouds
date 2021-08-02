@@ -3,12 +3,13 @@ package wordclouds
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
 	"image/color"
 	"image/png"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWordcloud_Draw(t *testing.T) {
@@ -31,7 +32,7 @@ func TestWordcloud_Draw(t *testing.T) {
 	defer f.Close()
 	reader := bufio.NewReader(f)
 	dec := json.NewDecoder(reader)
-	inputWords := make(map[string]int, 0)
+	inputWords := make(map[string]int)
 	err = dec.Decode(&inputWords)
 	assert.NoError(t, err)
 

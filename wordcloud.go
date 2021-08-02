@@ -1,8 +1,6 @@
 package wordclouds
 
 import (
-	"github.com/fogleman/gg"
-	"golang.org/x/image/font"
 	"image"
 	"image/color"
 	"math"
@@ -10,6 +8,9 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+
+	"github.com/fogleman/gg"
+	"golang.org/x/image/font"
 )
 
 type wordCount struct {
@@ -354,7 +355,7 @@ func (w *Wordcloud) nextPos(width float64, height float64) (x float64, y float64
 	for i := 0; i < runtime.NumCPU(); i++ {
 		wg.Add(1)
 		stopCh := make(chan struct{}, 1)
-		go func(ch chan struct{}, i int) {
+		go func(ch chan struct{}) {
 			defer wg.Done()
 			for {
 				select {
@@ -370,7 +371,7 @@ func (w *Wordcloud) nextPos(width float64, height float64) (x float64, y float64
 					return
 				}
 			}
-		}(stopCh, i)
+		}(stopCh)
 		stopChannels = append(stopChannels, stopCh)
 	}
 
@@ -388,7 +389,7 @@ func (w *Wordcloud) nextPos(width float64, height float64) (x float64, y float64
 				positions: c.positions(),
 				width:     width,
 				height:    height,
-				}:
+			}:
 			}
 		}
 		// Close channel after all positions have been sent

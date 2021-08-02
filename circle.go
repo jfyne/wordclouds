@@ -11,7 +11,7 @@ type point struct {
 }
 
 func newCircle(cx float64, cy float64, radius float64, maxSteps int) *circle {
-	pts := make([]point, maxSteps, maxSteps)
+	pts := make([]point, maxSteps)
 	for i := 0; i < maxSteps; i++ {
 		pts[i].x = cx + radius*math.Cos(float64(i)*(2*math.Pi/float64(maxSteps)))
 		pts[i].y = cy + radius*math.Sin(float64(i)*(2*math.Pi/float64(maxSteps)))

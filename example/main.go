@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/psykhi/wordclouds"
 	"image/color"
 	"image/png"
 	"log"
@@ -14,6 +13,8 @@ import (
 	"path/filepath"
 	"runtime/pprof"
 	"time"
+
+	"github.com/jfyne/wordclouds"
 )
 
 var path = flag.String("input", "input.json", "path to flat JSON like {\"word\":42,...}")
@@ -138,7 +139,7 @@ func main() {
 	img := w.Draw()
 	outputFile, err := os.Create(*output)
 	if err != nil {
-		// Handle error
+		log.Fatal(err)
 	}
 
 	// Encode takes a writer interface and an image interface
