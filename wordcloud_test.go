@@ -27,7 +27,8 @@ func TestWordcloud_Draw(t *testing.T) {
 	// Load words
 	f, err := os.Open("testdata/input.json")
 	if err != nil {
-		panic(err)
+		t.Error(err)
+		return
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
@@ -38,7 +39,7 @@ func TestWordcloud_Draw(t *testing.T) {
 
 	t0 := time.Now()
 
-	boxes := Mask(
+	boxes, err := Mask(
 		"testdata/mask.png",
 		2048,
 		2048,
@@ -48,17 +49,32 @@ func TestWordcloud_Draw(t *testing.T) {
 			B: 0,
 			A: 0,
 		})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	font, err := os.Open("testdata/Roboto-Regular.ttf")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer font.Close()
 
 	t.Logf("Mask loading took %v", time.Since(t0))
 	t0 = time.Now()
-	w := NewWordcloud(inputWords,
-		FontFile("testdata/Roboto-Regular.ttf"),
+	w, err := NewWordcloud(inputWords,
+		Font(font),
 		FontMaxSize(300),
 		FontMinSize(30),
 		Colors(colors),
 		MaskBoxes(boxes),
 		Height(2048),
 		Width(2048))
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	t.Logf("Wordcloud init took %v", time.Since(t0))
 	t0 = time.Now()
@@ -68,7 +84,7 @@ func TestWordcloud_Draw(t *testing.T) {
 	t.Logf("Drawing took %v", time.Since(t0))
 	t0 = time.Now()
 
-	outputFile, err := os.Create("res.png")
+	outputFile, err := os.Create("test.png")
 	assert.NoError(t, err)
 
 	// Encode takes a writer interface and an image interface

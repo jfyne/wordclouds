@@ -1,29 +1,25 @@
 package wordclouds
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+	"log"
 	"math"
 	"math/rand"
 	"runtime"
 	"sort"
 	"sync"
 
+	"github.com/disintegration/imaging"
 	"github.com/fogleman/gg"
+	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
 )
 
 type wordCount struct {
 	word  string
 	count int
-}
-
-type word2D struct {
-	wordCount
-	x           float64
-	y           float64
-	height      float64
-	boundingBox *Box
 }
 
 // Wordcloud object. Create one with NewWordcloud and use Draw() to get the image
@@ -33,13 +29,14 @@ type Wordcloud struct {
 	grid            *spatialHashMap
 	dc              *gg.Context
 	overlapCount    int
-	words2D         []*word2D
 	availableColors []color.Color
 	randomPlacement bool
 	width           float64
 	height          float64
 	opts            Options
 	circles         map[float64]*circle
+	baseFont        *truetype.Font
+	logo            image.Image
 	fonts           map[float64]font.Face
 	radii           []float64
 }
@@ -48,104 +45,41 @@ type Options struct {
 	FontMaxSize     int
 	FontMinSize     int
 	RandomPlacement bool
-	FontFile        string
+	Font            *truetype.Font
 	Colors          []color.Color
 	BackgroundColor color.Color
 	Width           int
 	Height          int
 	Mask            []*Box
 	Debug           bool
+	Logo            image.Image
 }
 
 var defaultOptions = Options{
 	FontMaxSize:     500,
 	FontMinSize:     10,
 	RandomPlacement: false,
-	FontFile:        "",
+	Font:            nil,
 	Colors:          []color.Color{color.RGBA{}},
 	BackgroundColor: color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff},
 	Width:           2048,
 	Height:          2048,
 	Mask:            make([]*Box, 0),
 	Debug:           false,
-}
-
-type Option func(*Options)
-
-// Path to font file
-func FontFile(path string) Option {
-	return func(options *Options) {
-		options.FontFile = path
-	}
-}
-
-// Output file background color
-func BackgroundColor(color color.Color) Option {
-	return func(options *Options) {
-		options.BackgroundColor = color
-	}
-}
-
-// Colors to use for the words
-func Colors(colors []color.Color) Option {
-	return func(options *Options) {
-		options.Colors = colors
-	}
-}
-
-// Max font size
-func FontMaxSize(max int) Option {
-	return func(options *Options) {
-		options.FontMaxSize = max
-	}
-}
-
-// Min font size
-func FontMinSize(min int) Option {
-	return func(options *Options) {
-		options.FontMinSize = min
-	}
-}
-
-// A list of bounding boxes where words can not be placed.
-// See Mask
-func MaskBoxes(mask []*Box) Option {
-	return func(options *Options) {
-		options.Mask = mask
-	}
-}
-
-func Width(w int) Option {
-	return func(options *Options) {
-		options.Width = w
-	}
-}
-
-func Height(h int) Option {
-	return func(options *Options) {
-		options.Height = h
-	}
-}
-
-// Place words randomly
-func RandomPlacement(do bool) Option {
-	return func(options *Options) {
-		options.RandomPlacement = do
-	}
-}
-
-// Draw bounding boxes around words
-func Debug() Option {
-	return func(options *Options) {
-		options.Debug = true
-	}
+	Logo:            nil,
 }
 
 // Initialize a wordcloud based on a map of word frequency.
-func NewWordcloud(wordList map[string]int, options ...Option) *Wordcloud {
+func NewWordcloud(wordList map[string]int, options ...Option) (*Wordcloud, error) {
 	opts := defaultOptions
 	for _, opt := range options {
-		opt(&opts)
+		if err := opt(&opts); err != nil {
+			return nil, fmt.Errorf("could not apply options: %w", err)
+		}
+	}
+
+	if opts.Font == nil {
+		return nil, fmt.Errorf("no font loaded")
 	}
 
 	sortedWordList := make([]wordCount, 0, len(wordList))
@@ -155,6 +89,9 @@ func NewWordcloud(wordList map[string]int, options ...Option) *Wordcloud {
 	sort.Slice(sortedWordList, func(i, j int) bool {
 		return sortedWordList[i].count > sortedWordList[j].count
 	})
+	if opts.Debug {
+		log.Println(sortedWordList)
+	}
 
 	dc := gg.NewContext(opts.Width, opts.Height)
 	dc.SetColor(opts.BackgroundColor)
@@ -185,7 +122,7 @@ func NewWordcloud(wordList map[string]int, options ...Option) *Wordcloud {
 		sortedWordList:  sortedWordList,
 		grid:            grid,
 		dc:              dc,
-		words2D:         make([]*word2D, 0),
+		baseFont:        opts.Font,
 		randomPlacement: opts.RandomPlacement,
 		width:           float64(opts.Width),
 		height:          float64(opts.Height),
@@ -193,7 +130,24 @@ func NewWordcloud(wordList map[string]int, options ...Option) *Wordcloud {
 		circles:         circles,
 		fonts:           make(map[float64]font.Face),
 		radii:           radii,
+		logo:            opts.Logo,
+	}, nil
+}
+
+func (w *Wordcloud) drawLogo() {
+	if w.opts.Logo == nil {
+		return
 	}
+
+	// Make sure the logo is nicely sized
+	width := math.Abs(w.width / 10)
+	if width > 80 {
+		width = 80
+	}
+
+	correctSize := imaging.Resize(w.logo, int(width), 0, imaging.Lanczos)
+
+	w.dc.DrawImage(correctSize, 0, int(w.height)-correctSize.Bounds().Dy())
 }
 
 func (w *Wordcloud) getPreciseBoundingBoxes(b *Box) []*Box {
@@ -220,11 +174,9 @@ func (w *Wordcloud) setFont(size float64) {
 	_, ok := w.fonts[size]
 
 	if !ok {
-		f, err := gg.LoadFontFace(w.opts.FontFile, size)
-		if err != nil {
-			panic(err)
-		}
-		w.fonts[size] = f
+		w.fonts[size] = truetype.NewFace(w.baseFont, &truetype.Options{
+			Size: size,
+		})
 	}
 
 	w.dc.SetFontFace(w.fonts[size])
@@ -235,9 +187,11 @@ func (w *Wordcloud) Place(wc wordCount) bool {
 	w.dc.SetColor(c)
 
 	size := float64(w.opts.FontMaxSize) * (float64(wc.count) / float64(w.sortedWordList[0].count))
-
 	if size < float64(w.opts.FontMinSize) {
 		size = float64(w.opts.FontMinSize)
+	}
+	if w.opts.Debug {
+		log.Println(wc, size)
 	}
 	w.setFont(size)
 	width, height := w.dc.MeasureString(wc.word)
@@ -246,6 +200,9 @@ func (w *Wordcloud) Place(wc wordCount) bool {
 	height += 5
 	x, y, space := w.nextPos(width, height)
 	if !space {
+		if w.opts.Debug {
+			log.Println("no space!!", x, y)
+		}
 		return false
 	}
 	w.dc.DrawStringAnchored(wc.word, x, y, 0.5, 0.5)
@@ -279,12 +236,14 @@ func (w *Wordcloud) Draw() image.Image {
 		if !success {
 			consecutiveMisses++
 			if consecutiveMisses > 10 {
+				log.Println("consecutiveMisses escape hatch")
 				return w.dc.Image()
 			}
 			continue
 		}
 		consecutiveMisses = 0
 	}
+	w.drawLogo()
 	return w.dc.Image()
 }
 

@@ -77,15 +77,15 @@ func main() {
 	// Load words
 	f, err := os.Open(*path)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
 	dec := json.NewDecoder(reader)
-	inputWords := make(map[string]int, 0)
+	inputWords := make(map[string]int)
 	err = dec.Decode(&inputWords)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Load config
@@ -108,16 +108,19 @@ func main() {
 	fmt.Printf("Configuration: %s\n", confJson)
 	err = json.Unmarshal(confJson, &conf)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 
 	var boxes []*wordclouds.Box
 	if conf.Mask.File != "" {
-		boxes = wordclouds.Mask(
+		boxes, err = wordclouds.Mask(
 			conf.Mask.File,
 			conf.Width,
 			conf.Height,
 			conf.Mask.Color)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	colors := make([]color.Color, 0)
@@ -125,9 +128,15 @@ func main() {
 		colors = append(colors, c)
 	}
 
+	font, err := os.Open(conf.FontFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer font.Close()
+
 	start := time.Now()
-	w := wordclouds.NewWordcloud(inputWords,
-		wordclouds.FontFile(conf.FontFile),
+	w, err := wordclouds.NewWordcloud(inputWords,
+		wordclouds.Font(font),
 		wordclouds.FontMaxSize(conf.FontMaxSize),
 		wordclouds.FontMinSize(conf.FontMinSize),
 		wordclouds.Colors(colors),
@@ -135,6 +144,9 @@ func main() {
 		wordclouds.Height(conf.Height),
 		wordclouds.Width(conf.Width),
 		wordclouds.RandomPlacement(conf.RandomPlacement))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	img := w.Draw()
 	outputFile, err := os.Create(*output)

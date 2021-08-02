@@ -8,12 +8,12 @@ import (
 )
 
 // Mask creates a slice of box structs from a given mask image to be passed to wordclouds.MaskBoxes.
-func Mask(path string, width int, height int, exclude color.RGBA) []*Box {
+func Mask(path string, width int, height int, exclude color.RGBA) ([]*Box, error) {
 	res := make([]*Box, 0)
 
 	img, err := gg.LoadPNG(path)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// scale
@@ -76,5 +76,5 @@ func Mask(path string, width int, height int, exclude color.RGBA) []*Box {
 		}
 	}
 
-	return res
+	return res, nil
 }
